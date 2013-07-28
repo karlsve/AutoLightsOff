@@ -3,6 +3,8 @@ package de.karlsve.autolightsoff;
 import java.util.ArrayList;
 import java.util.List;
 
+import android.app.Notification;
+import android.app.PendingIntent;
 import android.app.Service;
 import android.app.admin.DevicePolicyManager;
 import android.content.ComponentName;
@@ -57,30 +59,47 @@ public class LightSwitcher extends Service implements SensorEventListener {
     @Override
     public void onAccuracyChanged(Sensor s, int acc) {
     }
-
+    
+    @Override 
     public void onCreate() {
-        super.onCreate();
         deviceManager = (DevicePolicyManager) this
                 .getSystemService(Context.DEVICE_POLICY_SERVICE);
         sensorManager = (SensorManager) this
                 .getSystemService(Context.SENSOR_SERVICE);
         Sensor sensor = sensorManager.getDefaultSensor(Sensor.TYPE_LIGHT);
-        sensorManager.registerListener(this, sensor,
-                delay);
+        sensorManager.registerListener(this, sensor, delay);
         registeredSensors.add(sensor);
         sensor = sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
-        sensorManager.registerListener(this, sensor,
-                delay);
+        sensorManager.registerListener(this, sensor, delay);
         registeredSensors.add(sensor);
-//        sensor = sensorManager.getDefaultSensor(Sensor.TYPE_PROXIMITY);
-//        sensorManager.registerListener(this, sensor,
-//                delay);
-//        registeredSensors.add(sensor);
+        // sensor = sensorManager.getDefaultSensor(Sensor.TYPE_PROXIMITY);
+        // sensorManager.registerListener(this, sensor,
+        // delay);
+        // registeredSensors.add(sensor);
+        
+        Intent notificationIntent = new Intent(this, LightSwitcherActivity.class);
+        notificationIntent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, notificationIntent, 0);
+        
+        Notification note = new Notification.Builder(this)
+                .setContentTitle("AutoLightsOff")
+                .setContentText(
+                        "To remove this, disable the notification in the settings.")
+                .setSmallIcon(R.drawable.ic_launcher)
+                .setContentIntent(pendingIntent)
+                .build();
+        note.flags|=Notification.FLAG_NO_CLEAR;
+        this.startForeground(25, note);
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         return START_STICKY;
+    }
+    
+    @Override
+    public void onDestroy() {
+        stopForeground(true);
     }
 
     @Override
