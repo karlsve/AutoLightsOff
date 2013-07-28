@@ -153,7 +153,7 @@ public class LightSwitcher extends Service implements SensorEventListener {
         } else if (currentState == State.WOKEN
                 && (magneticClosed && lightClosed)) {
             lock();
-        } else if (currentState == State.LOCKED && (!magneticClosed || lightClosed)) {
+        } else if (currentState == State.LOCKED && (!magneticClosed || !lightClosed)) {
             wake();
         }
     }
