@@ -1,0 +1,10 @@
+<resources>
+
+    <string name="app_name">AutoLightsOff</string>
+    <string name="app_description">Locks/Unlocks the phone when flipover is opened or closed</string>
+    <string name="admin_receiver_status_enabled">AutoLightsOff is now able to automatically lock and wake your device</string>
+    <string name="admin_receiver_status_disable_warning">If this is disabled AutoLightsOff can only wake the device.</string>
+    <string name="app_settings">Settings</string>
+    <string name="app_threshold">Threshold</string>
+
+</resources>
