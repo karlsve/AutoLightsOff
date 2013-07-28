@@ -88,7 +88,7 @@ public class LightSwitcher extends Service implements SensorEventListener {
                 .setSmallIcon(R.drawable.ic_launcher)
                 .setContentIntent(pendingIntent)
                 .build();
-        note.flags|=Notification.FLAG_NO_CLEAR;
+        note.flags = Notification.FLAG_NO_CLEAR | Notification.FLAG_ONGOING_EVENT;
         this.startForeground(25, note);
     }
 
@@ -141,34 +141,26 @@ public class LightSwitcher extends Service implements SensorEventListener {
                 toggleLock();
             }
         };
-        r.run();
+        new Thread(r).start();
     }
 
     protected void toggleLock() {
         if (currentState == State.UNKNOWN && magneticClosed && lightClosed) {
-            currentState = State.LOCKED;
             lock();
         } else if (currentState == State.UNKNOWN
                 && (!magneticClosed && !lightClosed)) {
-            currentState = State.WOKEN;
             wake();
         } else if (currentState == State.WOKEN
                 && (magneticClosed && lightClosed)) {
-            currentState = State.LOCKED;
             lock();
-        } else if (currentState == State.LOCKED
-                && (!magneticClosed && !lightClosed)) {
-            currentState = State.WOKEN;
-            wake();
-        } else if (currentState == State.LOCKED
-                && (magneticClosed && !lightClosed)) {
-            currentState = State.WOKEN;
+        } else if (currentState == State.LOCKED && (!magneticClosed || lightClosed)) {
             wake();
         }
     }
 
     private void lock() {
         if (isActiveAdmin()) {
+            currentState = State.LOCKED;
             deviceManager.lockNow();
         }
     }
@@ -180,6 +172,7 @@ public class LightSwitcher extends Service implements SensorEventListener {
                 | PowerManager.FULL_WAKE_LOCK, "LightSwitcher");
         wake.acquire();
         wake.release();
+        currentState = State.WOKEN;
     }
 
     private boolean isActiveAdmin() {
