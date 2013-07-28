@@ -25,12 +25,14 @@ public class LightSwitcher extends Service implements SensorEventListener {
 
     private float difference = 450;
     private float accuracy = 180;
+    private int delay = SensorManager.SENSOR_DELAY_GAME;
 
     private int currentUpdate = 0;
     private float lastMagneticFieldValue = 0;
 
     private boolean magneticClosed = false;
     private boolean lightClosed = false;
+    @SuppressWarnings("unused")
     private boolean proximityClosed = false;
 
     private enum State {
@@ -64,16 +66,16 @@ public class LightSwitcher extends Service implements SensorEventListener {
                 .getSystemService(Context.SENSOR_SERVICE);
         Sensor sensor = sensorManager.getDefaultSensor(Sensor.TYPE_LIGHT);
         sensorManager.registerListener(this, sensor,
-                SensorManager.SENSOR_DELAY_NORMAL);
+                delay);
         registeredSensors.add(sensor);
         sensor = sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
         sensorManager.registerListener(this, sensor,
-                SensorManager.SENSOR_DELAY_NORMAL);
+                delay);
         registeredSensors.add(sensor);
-        sensor = sensorManager.getDefaultSensor(Sensor.TYPE_PROXIMITY);
-        sensorManager.registerListener(this, sensor,
-                SensorManager.SENSOR_DELAY_NORMAL);
-        registeredSensors.add(sensor);
+//        sensor = sensorManager.getDefaultSensor(Sensor.TYPE_PROXIMITY);
+//        sensorManager.registerListener(this, sensor,
+//                delay);
+//        registeredSensors.add(sensor);
     }
 
     @Override
@@ -132,15 +134,15 @@ public class LightSwitcher extends Service implements SensorEventListener {
             currentState = State.WOKEN;
             wake();
         } else if (currentState == State.WOKEN
-                && (magneticClosed && proximityClosed && lightClosed)) {
+                && (magneticClosed && lightClosed)) {
             currentState = State.LOCKED;
             lock();
         } else if (currentState == State.LOCKED
-                && (!magneticClosed && !lightClosed && !proximityClosed)) {
+                && (!magneticClosed && !lightClosed)) {
             currentState = State.WOKEN;
             wake();
         } else if (currentState == State.LOCKED
-                && (magneticClosed && !lightClosed && !proximityClosed)) {
+                && (magneticClosed && !lightClosed)) {
             currentState = State.WOKEN;
             wake();
         }
