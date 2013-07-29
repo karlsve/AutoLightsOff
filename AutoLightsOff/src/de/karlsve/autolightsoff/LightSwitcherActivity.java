@@ -10,35 +10,11 @@ import de.karlsve.autolightsoff.LightSwitcher.LightSwitcherBinder;
 
 public class LightSwitcherActivity extends Activity {
 	
-	private ServiceConnection serviceConnection = new ServiceConnection() {
-
-		@Override
-		public void onServiceConnected(ComponentName name, IBinder serviceBinder) {
-			binder = (LightSwitcherBinder)serviceBinder;
-		}
-
-		@Override
-		public void onServiceDisconnected(ComponentName name) {
-			binder = null;
-		}
-		
-	};
-	
-	LightSwitcherBinder binder = null;
-	
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		this.startService(new Intent(this.getApplicationContext(), LightSwitcher.class));
 		this.finish();
-	}
-	
-	@Override
-	public void onDestroy() {
-		super.onDestroy();
-		if(this.binder != null) {
-			this.unbindService(serviceConnection);
-		}
 	}
 	
 }
