@@ -11,6 +11,7 @@ import android.app.admin.DevicePolicyManager;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
@@ -20,6 +21,8 @@ import android.os.PowerManager;
 import android.os.PowerManager.WakeLock;
 
 public class LightSwitcher extends Service implements SensorEventListener {
+
+    public static final String PREFS_NAME = "autoLightsOff";
 
     private DevicePolicyManager deviceManager = null;
     private SensorManager sensorManager = null;
@@ -65,6 +68,14 @@ public class LightSwitcher extends Service implements SensorEventListener {
 
     @Override
     public void onCreate() {
+        SharedPreferences prefs = this.getSharedPreferences(PREFS_NAME, 0);
+        magneticsData.add(prefs.getFloat("lowestValue", 0));
+        magneticsData.add(prefs.getFloat("highestValue", 0));
+    }
+
+    @Override
+    public int onStartCommand(Intent intent, int flags, int startId) {
+
         deviceManager = (DevicePolicyManager) this
                 .getSystemService(Context.DEVICE_POLICY_SERVICE);
         sensorManager = (SensorManager) this
@@ -75,10 +86,7 @@ public class LightSwitcher extends Service implements SensorEventListener {
         sensor = sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
         sensorManager.registerListener(this, sensor, delay);
         registeredSensors.add(sensor);
-    }
 
-    @Override
-    public int onStartCommand(Intent intent, int flags, int startId) {
         Intent notificationIntent = new Intent(this,
                 LightSwitcherActivity.class);
         notificationIntent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -100,6 +108,14 @@ public class LightSwitcher extends Service implements SensorEventListener {
 
     @Override
     public void onDestroy() {
+        sensorManager.unregisterListener(this);
+        magneticsDataListState = ListState.BLOCKED;
+        SharedPreferences.Editor editor = this.getSharedPreferences(PREFS_NAME,
+                0).edit();
+        editor.putFloat("lowestValue", magneticsData.get(0));
+        editor.putFloat("highestValue",
+                magneticsData.get(magneticsData.size() - 1));
+        editor.commit();
         stopForeground(true);
     }
 
@@ -141,11 +157,11 @@ public class LightSwitcher extends Service implements SensorEventListener {
                 .getWho(this.getApplicationContext());
         return deviceManager.isAdminActive(adminReceiver);
     }
-    
+
     private class UpdateSensorData implements Runnable {
-        
+
         private SensorEvent se;
-        
+
         public UpdateSensorData(SensorEvent se) {
             this.se = se;
         }
@@ -171,6 +187,11 @@ public class LightSwitcher extends Service implements SensorEventListener {
                         }
                         magneticsData.add(sum);
                         Collections.sort(magneticsData);
+                        for (int i = 0; i < magneticsData.size() - 1; i++) {
+                            if (magneticsData.get(i) == 0) {
+                                magneticsData.remove(i);
+                            }
+                        }
                         for (int i = 1; i < magneticsData.size() - 1; i++) {
                             magneticsData.remove(i);
                         }
@@ -189,6 +210,6 @@ public class LightSwitcher extends Service implements SensorEventListener {
                 isUpdating = false;
             }
         }
-        
+
     }
 }
