@@ -24,29 +24,35 @@ public class LightSwitcher extends Service implements SensorEventListener {
     private DevicePolicyManager deviceManager = null;
     private SensorManager sensorManager = null;
     private List<Sensor> registeredSensors = new ArrayList<Sensor>();
-    
+
     private List<Float> magneticsData = new ArrayList<Float>();
-    
-    private int delay = SensorManager.SENSOR_DELAY_NORMAL;
-    
+
+    float threshold = 100;
+
+    private int delay = SensorManager.SENSOR_DELAY_UI;
+
     private Notification note = null;
 
-    private boolean magneticClosed = false;
-    private boolean lightClosed = false;
     @SuppressWarnings("unused")
     private boolean proximityClosed = false;
-    
+
+    private boolean isUpdating = false;
+
     private enum ListState {
         BLOCKED, FREE
     }
-    
-    private ListState listState = ListState.FREE;
 
     private enum State {
-        UNKNOWN, WOKEN, LOCKED
+        OPEN, CLOSED, UNKNOWN
     }
 
-    private State currentState = State.UNKNOWN;
+    private ListState magneticsDataListState = ListState.FREE;
+
+    private State magneticsCaseState = State.UNKNOWN;
+
+    private State lightCaseState = State.UNKNOWN;
+
+    private State deviceState = State.OPEN;
 
     @Override
     public void onAccuracyChanged(Sensor s, int acc) {
@@ -56,8 +62,8 @@ public class LightSwitcher extends Service implements SensorEventListener {
     public IBinder onBind(Intent intent) {
         return null;
     }
-    
-    @Override 
+
+    @Override
     public void onCreate() {
         deviceManager = (DevicePolicyManager) this
                 .getSystemService(Context.DEVICE_POLICY_SERVICE);
@@ -73,22 +79,25 @@ public class LightSwitcher extends Service implements SensorEventListener {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        Intent notificationIntent = new Intent(this, LightSwitcherActivity.class);
-        notificationIntent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, notificationIntent, 0);
-        
+        Intent notificationIntent = new Intent(this,
+                LightSwitcherActivity.class);
+        notificationIntent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP
+                | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        PendingIntent pendingIntent = PendingIntent.getActivity(this, 0,
+                notificationIntent, 0);
+
         note = new Notification.Builder(this)
                 .setContentTitle(this.getText(R.string.notification_title))
                 .setContentText(this.getText(R.string.notification_text))
                 .setSmallIcon(R.drawable.ic_launcher)
-                .setContentIntent(pendingIntent)
-                .build();
-        note.flags = Notification.FLAG_NO_CLEAR | Notification.FLAG_ONGOING_EVENT;
+                .setContentIntent(pendingIntent).build();
+        note.flags = Notification.FLAG_NO_CLEAR
+                | Notification.FLAG_ONGOING_EVENT;
         this.startForeground(25, note);
-        
+
         return START_STICKY;
     }
-    
+
     @Override
     public void onDestroy() {
         stopForeground(true);
@@ -96,62 +105,23 @@ public class LightSwitcher extends Service implements SensorEventListener {
 
     @Override
     public void onSensorChanged(final SensorEvent se) {
-        Runnable r = new Runnable() {
-            @Override
-            public void run() {
-                switch (se.sensor.getType()) {
-                case Sensor.TYPE_PROXIMITY:
-                    proximityClosed = se.values[0] == 0.0;
-                    break;
-                case Sensor.TYPE_LIGHT:
-                    lightClosed = se.values[0] == 0.0;
-                    break;
-                case Sensor.TYPE_MAGNETIC_FIELD:
-                    if(listState == ListState.FREE) {
-                        listState = ListState.BLOCKED;
-                        Float sum = Float.valueOf(0);
-                        for(Float value : se.values) {
-                            sum += value;
-                        }
-                        magneticsData.add(sum);
-                        Collections.sort(magneticsData);
-                        for(int i = 1; i < magneticsData.size() - 1; i++) {
-                            magneticsData.remove(i);
-                        }
-                        
-                        float threshold = Math.abs(magneticsData.get(0) - magneticsData.get(1)) / 4;
-                        
-                        boolean min = sum > (magneticsData.get(magneticsData.size() - 1) - threshold);
-                        boolean max = sum < (magneticsData.get(magneticsData.size() -1) + threshold);
-                        magneticClosed = min && max;
-                        listState = ListState.FREE;
-                    }
-                    break;
-                }
-                toggleLock();
-            }
-        };
-        new Thread(r).start();
+        new Thread(new UpdateSensorData(se)).run();
     }
 
     protected void toggleLock() {
-        if (currentState == State.UNKNOWN && magneticClosed && lightClosed) {
+        if (deviceState == State.OPEN && magneticsCaseState == State.CLOSED
+                && lightCaseState == State.CLOSED) {
             lock();
-        } else if (currentState == State.UNKNOWN
-                && (!magneticClosed && !lightClosed)) {
-            wake();
-        } else if (currentState == State.WOKEN
-                && (magneticClosed && lightClosed)) {
-            lock();
-        } else if (currentState == State.LOCKED && (!magneticClosed || !lightClosed)) {
+        } else if (deviceState == State.CLOSED
+                && (magneticsCaseState == State.OPEN || lightCaseState == State.OPEN)) {
             wake();
         }
     }
 
     private void lock() {
         if (isActiveAdmin()) {
-            currentState = State.LOCKED;
             deviceManager.lockNow();
+            deviceState = State.CLOSED;
         }
     }
 
@@ -159,15 +129,66 @@ public class LightSwitcher extends Service implements SensorEventListener {
     private void wake() {
         PowerManager manager = (PowerManager) getSystemService(Context.POWER_SERVICE);
         WakeLock wake = manager.newWakeLock(PowerManager.ACQUIRE_CAUSES_WAKEUP
-                | PowerManager.FULL_WAKE_LOCK, this.getText(R.string.app_name).toString());
+                | PowerManager.FULL_WAKE_LOCK, this.getText(R.string.app_name)
+                .toString());
         wake.acquire();
         wake.release();
-        currentState = State.WOKEN;
+        deviceState = State.OPEN;
     }
 
     private boolean isActiveAdmin() {
         ComponentName adminReceiver = new LightSwitcherDeviceAdminReceiver()
                 .getWho(this.getApplicationContext());
         return deviceManager.isAdminActive(adminReceiver);
+    }
+    
+    private class UpdateSensorData implements Runnable {
+        
+        private SensorEvent se;
+        
+        public UpdateSensorData(SensorEvent se) {
+            this.se = se;
+        }
+
+        @Override
+        public void run() {
+            if (!isUpdating) {
+                isUpdating = true;
+                switch (se.sensor.getType()) {
+                case Sensor.TYPE_PROXIMITY:
+                    proximityClosed = se.values[0] == 0.0;
+                    break;
+                case Sensor.TYPE_LIGHT:
+                    lightCaseState = se.values[0] == Float.valueOf(0) ? State.CLOSED
+                            : State.OPEN;
+                    break;
+                case Sensor.TYPE_MAGNETIC_FIELD:
+                    if (magneticsDataListState == ListState.FREE) {
+                        magneticsDataListState = ListState.BLOCKED;
+                        Float sum = Float.valueOf(0);
+                        for (Float value : se.values) {
+                            sum += value;
+                        }
+                        magneticsData.add(sum);
+                        Collections.sort(magneticsData);
+                        for (int i = 1; i < magneticsData.size() - 1; i++) {
+                            magneticsData.remove(i);
+                        }
+                        boolean open = sum < (magneticsData.get(0) + threshold);
+                        boolean closed = sum > (magneticsData.get(magneticsData
+                                .size() - 1) - threshold);
+
+                        magneticsCaseState = open ? State.OPEN
+                                : closed ? State.CLOSED : State.UNKNOWN;
+
+                        magneticsDataListState = ListState.FREE;
+                    }
+                    break;
+                }
+                toggleLock();
+                isUpdating = false;
+            }
+        }
+        
     }
 }
