@@ -1,6 +1,7 @@
 package de.karlsve.autolightsoff;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import android.app.Notification;
@@ -14,7 +15,6 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
-import android.os.Binder;
 import android.os.IBinder;
 import android.os.PowerManager;
 import android.os.PowerManager.WakeLock;
@@ -24,13 +24,10 @@ public class LightSwitcher extends Service implements SensorEventListener {
     private DevicePolicyManager deviceManager = null;
     private SensorManager sensorManager = null;
     private List<Sensor> registeredSensors = new ArrayList<Sensor>();
-
-    private float difference = 450;
-    private float accuracy = 180;
+    
+    private List<Float> magneticsData = new ArrayList<Float>();
+    
     private int delay = SensorManager.SENSOR_DELAY_NORMAL;
-
-    private int currentUpdate = 0;
-    private float lastMagneticFieldValue = 0;
     
     private Notification note = null;
 
@@ -38,6 +35,12 @@ public class LightSwitcher extends Service implements SensorEventListener {
     private boolean lightClosed = false;
     @SuppressWarnings("unused")
     private boolean proximityClosed = false;
+    
+    private enum ListState {
+        BLOCKED, FREE
+    }
+    
+    private ListState listState = ListState.FREE;
 
     private enum State {
         UNKNOWN, WOKEN, LOCKED
@@ -47,6 +50,11 @@ public class LightSwitcher extends Service implements SensorEventListener {
 
     @Override
     public void onAccuracyChanged(Sensor s, int acc) {
+    }
+
+    @Override
+    public IBinder onBind(Intent intent) {
+        return null;
     }
     
     @Override 
@@ -61,10 +69,6 @@ public class LightSwitcher extends Service implements SensorEventListener {
         sensor = sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
         sensorManager.registerListener(this, sensor, delay);
         registeredSensors.add(sensor);
-        // sensor = sensorManager.getDefaultSensor(Sensor.TYPE_PROXIMITY);
-        // sensorManager.registerListener(this, sensor,
-        // delay);
-        // registeredSensors.add(sensor);
     }
 
     @Override
@@ -74,9 +78,8 @@ public class LightSwitcher extends Service implements SensorEventListener {
         PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, notificationIntent, 0);
         
         note = new Notification.Builder(this)
-                .setContentTitle("AutoLightsOff")
-                .setContentText(
-                        "To remove this, disable the notification in the settings.")
+                .setContentTitle(this.getText(R.string.notification_title))
+                .setContentText(this.getText(R.string.notification_text))
                 .setSmallIcon(R.drawable.ic_launcher)
                 .setContentIntent(pendingIntent)
                 .build();
@@ -104,27 +107,25 @@ public class LightSwitcher extends Service implements SensorEventListener {
                     lightClosed = se.values[0] == 0.0;
                     break;
                 case Sensor.TYPE_MAGNETIC_FIELD:
-                    if (currentUpdate % 15 == 0) {
-                        float sum = 0;
-                        for (float value : se.values) {
+                    if(listState == ListState.FREE) {
+                        listState = ListState.BLOCKED;
+                        Float sum = Float.valueOf(0);
+                        for(Float value : se.values) {
                             sum += value;
                         }
-                        float actualDifference = lastMagneticFieldValue > sum ? lastMagneticFieldValue
-                                - sum
-                                : sum - lastMagneticFieldValue;
-                        float actualAccuracy = difference > actualDifference ? difference
-                                - actualDifference
-                                : actualDifference - difference;
-                        if (lastMagneticFieldValue != 0) {
-                            if (actualAccuracy >= 0
-                                    && actualAccuracy <= accuracy + se.accuracy) {
-                                magneticClosed = lastMagneticFieldValue > sum ? false
-                                        : true;
-                            }
+                        magneticsData.add(sum);
+                        Collections.sort(magneticsData);
+                        for(int i = 1; i < magneticsData.size() - 1; i++) {
+                            magneticsData.remove(i);
                         }
-                        lastMagneticFieldValue = sum;
+                        
+                        float threshold = Math.abs(magneticsData.get(0) - magneticsData.get(1)) / 4;
+                        
+                        boolean min = sum > (magneticsData.get(magneticsData.size() - 1) - threshold);
+                        boolean max = sum < (magneticsData.get(magneticsData.size() -1) + threshold);
+                        magneticClosed = min && max;
+                        listState = ListState.FREE;
                     }
-                    currentUpdate++;
                     break;
                 }
                 toggleLock();
@@ -158,7 +159,7 @@ public class LightSwitcher extends Service implements SensorEventListener {
     private void wake() {
         PowerManager manager = (PowerManager) getSystemService(Context.POWER_SERVICE);
         WakeLock wake = manager.newWakeLock(PowerManager.ACQUIRE_CAUSES_WAKEUP
-                | PowerManager.FULL_WAKE_LOCK, "LightSwitcher");
+                | PowerManager.FULL_WAKE_LOCK, this.getText(R.string.app_name).toString());
         wake.acquire();
         wake.release();
         currentState = State.WOKEN;

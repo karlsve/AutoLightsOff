@@ -6,5 +6,7 @@
     <string name="admin_receiver_status_disable_warning">If this is disabled AutoLightsOff can only wake the device.</string>
     <string name="app_settings">Settings</string>
     <string name="app_threshold">Threshold</string>
+    <string name="notification_text">To remove this, disable the notification in the settings.</string>
+    <string name="notification_title">AutoLightsOff</string>
 
 </resources>

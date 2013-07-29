@@ -1,12 +1,8 @@
 package de.karlsve.autolightsoff;
 
 import android.app.Activity;
-import android.content.ComponentName;
 import android.content.Intent;
-import android.content.ServiceConnection;
 import android.os.Bundle;
-import android.os.IBinder;
-import de.karlsve.autolightsoff.LightSwitcher.LightSwitcherBinder;
 
 public class LightSwitcherActivity extends Activity {
 	
