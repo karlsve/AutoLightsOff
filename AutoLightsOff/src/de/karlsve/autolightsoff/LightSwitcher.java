@@ -27,10 +27,12 @@ public class LightSwitcher extends Service implements SensorEventListener {
 
     private float difference = 450;
     private float accuracy = 180;
-    private int delay = SensorManager.SENSOR_DELAY_GAME;
+    private int delay = SensorManager.SENSOR_DELAY_NORMAL;
 
     private int currentUpdate = 0;
     private float lastMagneticFieldValue = 0;
+    
+    private Notification note = null;
 
     private boolean magneticClosed = false;
     private boolean lightClosed = false;
@@ -42,19 +44,6 @@ public class LightSwitcher extends Service implements SensorEventListener {
     }
 
     private State currentState = State.UNKNOWN;
-
-    public class LightSwitcherBinder extends Binder {
-        public LightSwitcher getService() {
-            return LightSwitcher.this;
-        }
-    }
-
-    IBinder binder = new LightSwitcherBinder();
-
-    @Override
-    public IBinder onBind(Intent intent) {
-        return binder;
-    }
 
     @Override
     public void onAccuracyChanged(Sensor s, int acc) {
@@ -76,12 +65,15 @@ public class LightSwitcher extends Service implements SensorEventListener {
         // sensorManager.registerListener(this, sensor,
         // delay);
         // registeredSensors.add(sensor);
-        
+    }
+
+    @Override
+    public int onStartCommand(Intent intent, int flags, int startId) {
         Intent notificationIntent = new Intent(this, LightSwitcherActivity.class);
         notificationIntent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, notificationIntent, 0);
         
-        Notification note = new Notification.Builder(this)
+        note = new Notification.Builder(this)
                 .setContentTitle("AutoLightsOff")
                 .setContentText(
                         "To remove this, disable the notification in the settings.")
@@ -90,10 +82,7 @@ public class LightSwitcher extends Service implements SensorEventListener {
                 .build();
         note.flags = Notification.FLAG_NO_CLEAR | Notification.FLAG_ONGOING_EVENT;
         this.startForeground(25, note);
-    }
-
-    @Override
-    public int onStartCommand(Intent intent, int flags, int startId) {
+        
         return START_STICKY;
     }
     
